@@ -1,11 +1,12 @@
 {
-  "engines" : {
-    "node" : "16.x",
-    "npm" : "6.x"
+  "engines": {
+    "node": "16.x",
+    "npm": "6.x"
   },
   "dependencies": {
     "@discordjs/rest": "^0.2.0-canary.0",
     "@discordjs/voice": "^0.7.5",
+    "autoconf": "^1.2.0",
     "cors": "^2.8.5",
     "discord.js": "^13.5.1",
     "discordjs-ytdl": "^2.2.0",
@@ -13,6 +14,7 @@
     "fetch": "^1.1.0",
     "ffmpeg": "^0.0.4",
     "ffmpeg-static": "^4.4.1",
+    "libsodium-wrappers": "^0.7.9",
     "node-fetch": "^2.6.6",
     "pg": "^8.7.1",
     "youtube-dl-exec": "^2.0.2",
