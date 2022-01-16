@@ -202,7 +202,7 @@ client.on('interactionCreate', async interaction => {
         // Defer the reply
         interaction.deferReply();
 
-        let songInfo = await addToQueue(song, interaction.member.displayName);
+        let songInfo = await addToQueue(song, interaction.member.displayName, false);
         if (!songInfo) { 
             interaction.editReply('Unable to play: no song found.');
             return;
@@ -399,11 +399,10 @@ client.on('interactionCreate', async interaction => {
 
 
 // COMMANDS ----------------------------------------------------------------------------
-async function getSongInfo(song) { 
+async function getSongInfo(song, isID) { 
 
     // Get song information
     let songInfo = {
-        query: '',
         name: '',
         url: '',
         id: '',
@@ -412,15 +411,23 @@ async function getSongInfo(song) {
         duration: 0
     };
 
-    // Check if song is a URL
-    if (song.includes('youtube.com')) {
-        // Extract song ID
-        songInfo.query = song.split('v=')[1].split('&')[0];
+    // If this is the song's ID...
+    let songQuery = '';
+    if (isID) { 
+        songQuery = 'https://www.youtube.com/watch?v=' + song;
     } else {
-        songInfo.query = song;
+        // Check if song is a URL
+        if (song.includes('youtube.com')) {
+            // Extract song ID
+            songQuery = 'https://www.youtube.com/watch?v=' + song.split('v=')[1].split('&')[0];
+        } else {
+            songQuery = 'ytsearch1:' + song;
+        }
     }
 
-    let output = await youtubedl('ytsearch1:' + songInfo.query, { format: 'bestaudio[ext=m4a]', defaultSearch: 'auto', dumpJson: true })
+    
+
+    let output = await youtubedl(songQuery, { format: 'bestaudio[ext=m4a]', defaultSearch: 'auto', dumpJson: true })
 
     // Check if song was found
     if (!output) {
@@ -439,11 +446,11 @@ async function getSongInfo(song) {
     return songInfo;
 }
 
-async function addToQueue(song, user) {
+async function addToQueue(song, user, isID = false) {
     console.log('Adding song to queue: ' + song);
 
     // Get song information
-    let songInfo = await getSongInfo(song);
+    let songInfo = await getSongInfo(song, isID);
 
     // Add user
     if (typeof user == 'string') { songInfo.user = user; } else { songInfo.user = 'Unknown'; }
@@ -752,7 +759,7 @@ app.post('/play', cors(corsOptions), async function (req, res) {
     if (!member.voice.channel) { res.status(401).send('User is not in a voice channel!'); return; }
 
     // Add to queue
-    await addToQueue(payload.term, member.displayName + ' (via web)');
+    await addToQueue(payload.term, member.displayName + ' (via web)', false);
 
     // Play song
     if (!isPlaying) { await playSong(member.voice.channel, false); }
@@ -1049,7 +1056,7 @@ app.get('/playlist', cors(corsOptions), async function (req, res) {
     // Add the items to the playlist
     for (item of result.rows) {
         // Get song info
-        let songInfo = await getSongInfo(item.url)
+        let songInfo = await getSongInfo(item.url, false);
         console.log(songInfo);
 
         playlistInfo.items.push({
@@ -1117,7 +1124,7 @@ app.post('/playlist/addToQueue', cors(corsOptions), async function (req, res) {
         console.log(item);
 
         // Add to queue
-        await addToQueue(item.id, userName);
+        await addToQueue(item.id, userName, true);
     }
 
     // Play song
@@ -1225,7 +1232,7 @@ app.post('/playlist/song/add', cors(corsOptions), async function (req, res) {
     if (!song) { res.status(400).send('No song provided.'); return; }
 
     // Get song info
-    let songInfo = await getSongInfo(song);
+    let songInfo = await getSongInfo(song, true);
 
     // Check if that playlist exists
     var query = 'SELECT * FROM playlists WHERE id = $1 AND user_id = $2';
