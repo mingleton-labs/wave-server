@@ -414,12 +414,12 @@ async function getSongInfo(song, isID) {
     // If this is the song's ID...
     let songQuery = '';
     if (isID) { 
-        songQuery = 'https://www.youtube.com/watch?v=' + song;
+        songQuery = song;
     } else {
         // Check if song is a URL
         if (song.includes('youtube.com')) {
             // Extract song ID
-            songQuery = 'https://www.youtube.com/watch?v=' + song.split('v=')[1].split('&')[0];
+            songQuery = song;
         } else {
             songQuery = 'ytsearch1:' + song;
         }
