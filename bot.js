@@ -414,7 +414,7 @@ async function getSongInfo(song, isID) {
     // If this is the song's ID...
     let songQuery = '';
     if (isID) { 
-        songQuery = song;
+        songQuery = 'https://www.youtube.com/watch?v=' + song;
     } else {
         // Check if song is a URL
         if (song.includes('youtube.com')) {
@@ -495,9 +495,16 @@ async function playSong(channel, isInQueue = false) {
     let songInfo = queue[0];
 
     // Download video
-    let stream = ytdl(songInfo.url);
+    let stream = ytdl(songInfo.url, {
+        filter: 'audioonly',
+        quality: 'lowestaudio',
+        source_address: '0.0.0.0'
+    });
+
+    console.log('streaming...');
     player = createAudioPlayer();
-    resource = createAudioResource(stream);
+    console.log('playing...');
+    let resource = createAudioResource(stream);
 
     // Play song
     player.play(resource);
@@ -934,7 +941,7 @@ app.get('/playlist/list', cors(corsOptions), async function (req, res) {
 
     if (userID) { 
         // Get a particular user's playlists
-        var query = 'SELECT * FROM playlists WHERE user_id = $1 ORDER BY name;';
+        var query = 'SELECT * FROM playlists WHERE user_id = $1 ORDER BY user_id, name;';
         var params = [userID];
         pgClient.query(query, params, function(err, result) {
             if (err) { 
@@ -944,28 +951,30 @@ app.get('/playlist/list', cors(corsOptions), async function (req, res) {
             }
 
             // Check if there are any items in the result
-            if (result.rows.length == 0) { res.status(500).send('No playlists with the current query found.'); return; }
+            if (result.rows.length == 0) { res.status(404).send('No playlists with the current query found.'); return; }
 
             // Add the items to the playlist list
             for (item of result.rows) {
-
-                // Get associated username
-                let member = boundGuild.members.cache.get(item.user_id);
-
                 // Add items to playlist list
-                playlistList.push({
+                let playlistInfo = {
                     id: item.id,
                     name: item.name,
                     userID: item.user_id,
-                    userName: member.displayName
-                });
+                    displayName: 'unknown'
+                };
+
+                // Get associated username
+                var member = boundGuild.members.cache.get(item.user_id);
+                if (member) { playlistInfo.displayName = member.displayName; }
+
+                playlistList.push(playlistInfo);
             }
 
             res.status(200).send(JSON.stringify(playlistList));
         });
     } else {
         // Get all playlists
-        var query = 'SELECT * FROM playlists ORDER BY name;';
+        var query = 'SELECT * FROM playlists ORDER BY user_id, name;';
         pgClient.query(query, function(err, result) {
             if (err) { 
                 console.log(err); 
@@ -974,21 +983,24 @@ app.get('/playlist/list', cors(corsOptions), async function (req, res) {
             }
 
             // Check if there are any items in the result
-            if (result.rows.length == 0) { res.status(500).send('No playlists with the current query found.'); return; }
+            if (result.rows.length == 0) { res.status(404).send('No playlists with the current query found.'); return; }
 
             // Add the items to the playlist list
             for (item of result.rows) {
                 
-                // Get associated username
-                let member = boundGuild.members.cache.get(item.user_id);
-
-                // Add items to playlist list
-                playlistList.push({
+                // Compile playlist info
+                let playlistInfo = {
                     id: item.id,
                     name: item.name,
                     userID: item.user_id,
-                    userName: member.displayName
-                });
+                    displayName: 'unknown'
+                };
+
+                // Get associated username
+                var member = boundGuild.members.cache.get(item.user_id);
+                if (member) { playlistInfo.displayName = member.displayName; }
+
+                playlistList.push(playlistInfo);
             }
 
             console.log(playlistList);
@@ -1001,7 +1013,7 @@ app.get('/playlist/list', cors(corsOptions), async function (req, res) {
 app.get('/playlist', cors(corsOptions), async function (req, res) { 
 
     // Collect variables
-    let userID = req.query.userID;
+    let userID = req.query.userID;      // Used to check if playlist is editable
     let playlistID = req.query.playlistID;
 
     // Check required content
@@ -1010,6 +1022,7 @@ app.get('/playlist', cors(corsOptions), async function (req, res) {
 
     let playlistInfo = {
         id: '',
+        isEditable: false,
         name: '',
         userID: '',
         userName: 'unknown',
@@ -1017,8 +1030,8 @@ app.get('/playlist', cors(corsOptions), async function (req, res) {
     }
 
     // Get the playlist
-    var query = 'SELECT * FROM playlists WHERE id = $1 AND user_id = $2';
-    var params = [playlistID, userID];
+    var query = 'SELECT * FROM playlists WHERE id = $1;';
+    var params = [playlistID];
     var err, result = await pgClient.query(query, params);
     if (err) { 
         console.log(err); 
@@ -1028,22 +1041,23 @@ app.get('/playlist', cors(corsOptions), async function (req, res) {
 
     if (result.rows.length === 0) {
         console.log('Playlist does not exist!');
-        res.status(404).send('A playlist with that playlistID and userID does not exist.');
+        res.status(404).send('A playlist with that playlistID does not exist.');
         return;
     }
 
     // Add info 
     playlistInfo.id = playlistID;
     playlistInfo.name = result.rows[0].name;
-    playlistInfo.userID = userID;
+    playlistInfo.userID = result.rows[0].user_id;
+    playlistInfo.isEditable = (result.rows[0].user_id == userID);
 
     // Get the guild member associated with the id
-    let member = boundGuild.members.cache.get(userID);
+    let member = boundGuild.members.cache.get(playlistInfo.userID);
     if (member) { playlistInfo.userName = member.displayName; }
 
     // Get the playlist items
-    var query = 'SELECT * FROM playlistitems WHERE playlist_id = $1 AND user_id = $2 ORDER BY index';
-    var params = [playlistID, userID];
+    var query = 'SELECT * FROM playlistitems WHERE playlist_id = $1 ORDER BY index';
+    var params = [playlistID];
     var err, result = await pgClient.query(query, params)
     if (err) { 
         console.log(err); 
@@ -1055,18 +1069,13 @@ app.get('/playlist', cors(corsOptions), async function (req, res) {
 
     // Add the items to the playlist
     for (item of result.rows) {
-        // Get song info
-        let songInfo = await getSongInfo(item.url, false);
-        console.log(songInfo);
-
         playlistInfo.items.push({
             index: item.index,
-            id: item.id,
-            url: item.url,
-            name: songInfo.name,
-            thumbnail_url: songInfo.thumbnail_url,
-            artist: songInfo.artist,
-            duration: songInfo.duration
+            songID: item.song_id,
+            songName: item.song_name,
+            songThumbnailURL: item.song_thumbnail_url,
+            songArtist: item.song_artist,
+            songDuration: item.song_duration
         });
     }
 
@@ -1084,8 +1093,8 @@ app.post('/playlist/addToQueue', cors(corsOptions), async function (req, res) {
     if (!playlistID) { res.status(400).send('No playlistID supplied.'); return; }
 
     // Check if the playlist exists
-    var query = 'SELECT * FROM playlists WHERE id = $1 AND user_id = $2';
-    var params = [playlistID, userID];
+    var query = 'SELECT * FROM playlists WHERE id = $1;';
+    var params = [playlistID];
     var err, result = await pgClient.query(query, params);
     if (err) { 
         console.log(err); 
@@ -1095,12 +1104,14 @@ app.post('/playlist/addToQueue', cors(corsOptions), async function (req, res) {
 
     if (result.rows.length === 0) {
         console.log('Playlist does not exist!');
-        res.status(404).send('A playlist with that playlistID and userID does not exist.');
+        res.status(404).send('A playlist with that playlistID does not exist.');
         return;
     }
 
-    var query = 'SELECT * FROM playlistitems WHERE playlist_id = $1 AND user_id = $2 ORDER BY index';
-    var params = [playlistID, userID];
+    let playlistName = result.rows[0].name;
+
+    var query = 'SELECT * FROM playlistitems WHERE playlist_id = $1 ORDER BY index';
+    var params = [playlistID];
     var err, result = await pgClient.query(query, params)
     if (err) { 
         console.log(err); 
@@ -1110,25 +1121,30 @@ app.post('/playlist/addToQueue', cors(corsOptions), async function (req, res) {
 
     if (result.rows.length === 0) { 
         console.log('Insufficient playlist items');
-        res.status(401).send('There are no items on this playlist');
+        res.status(404).send('There are no items on this playlist');
         return;
     }
 
     // Get member associated with ID
     let userName = 'unknown via playlist.';
     let member = boundGuild.members.cache.get(userID);
-    if (member) { userName = member.displayName + ' via playlist'; }
+    if (member) { userName = member.displayName + ' (via web from ' + playlistName + ')'; }
+
+    // Check if the member is in a voice channel
+    if (!member.voice.channel) { 
+        res.status(401).send('The user must be in a voice chat to add items to the queue.');
+    }
 
     // Add items to queue
     for (item of result.rows) { 
         console.log(item);
 
         // Add to queue
-        await addToQueue(item.id, userName, true);
-    }
+        await addToQueue(item.song_id, userName, true);
 
-    // Play song
-    if (!isPlaying) { await playSong(member.voice.channel, false); }
+        // Play song
+        if (!isPlaying) { await playSong(member.voice.channel, false); }
+    }
 
     res.status(200).send('Playlist successfully queued!');
 });
@@ -1223,7 +1239,7 @@ app.post('/playlist/song/add', cors(corsOptions), async function (req, res) {
 
     // Collect variables
     let playlistID = req.body.playlistID;
-    let userID = req.body.userID;
+    let userID = req.body.userID;   
     let song = req.body.song;
 
     // Check required content
@@ -1232,11 +1248,11 @@ app.post('/playlist/song/add', cors(corsOptions), async function (req, res) {
     if (!song) { res.status(400).send('No song provided.'); return; }
 
     // Get song info
-    let songInfo = await getSongInfo(song, true);
+    let songInfo = await getSongInfo(song, false);
 
     // Check if that playlist exists
-    var query = 'SELECT * FROM playlists WHERE id = $1 AND user_id = $2';
-    var params = [playlistID, userID];
+    var query = 'SELECT * FROM playlists WHERE id = $1;';
+    var params = [playlistID];
     pgClient.query(query, params, function(err, result) {
         if (err) { 
             console.log(err); 
@@ -1246,13 +1262,19 @@ app.post('/playlist/song/add', cors(corsOptions), async function (req, res) {
 
         if (result.rows.length === 0) {
             console.log('Playlist does not exist!');
-            res.status(404).send('A playlist with that playlistID and userID does not exist.'); 
+            res.status(404).send('A playlist with that playlistID does not exist.'); 
             return;
         }
 
+        // Check if the user is authorised to add a song to the playlist
+        if (!result.rows[0].user_id === userID) { 
+            res.status(401).send('User is unauthorised to add songs to that playlist.');
+            return; 
+        }
+
         // Add the song to the playlist
-        query = 'INSERT INTO playlistitems (id, playlist_id, url, user_id) VALUES ($1, $2, $3, $4) RETURNING index;';
-        params = [songInfo.id, playlistID, songInfo.url, userID];
+        query = 'INSERT INTO playlistitems (playlist_id, user_id, song_id, song_name, song_artist, song_duration, song_thumbnail_url) VALUES ($1, $2, $3, $4, $5, $6, $7);';
+        params = [playlistID, userID, songInfo.id, songInfo.name, songInfo.artist, songInfo.duration, songInfo.thumbnail_url];
         pgClient.query(query, params, function(err, result) {
             if (err) { 
                 console.log(err); 
@@ -1261,7 +1283,7 @@ app.post('/playlist/song/add', cors(corsOptions), async function (req, res) {
             }
 
             console.log('Added song to playlist!');
-            res.status(200).send(JSON.stringify(result.rows[0].index)); 
+            res.status(200).send('Song successfully added to that playlist.'); 
         });
     });
 });
@@ -1279,8 +1301,8 @@ app.post('/playlist/song/remove', cors(corsOptions), async function (req, res) {
     if (!songIndex) { res.status(400).send('No songIndex provided.'); return; }
 
     // Check if that playlist exists
-    var query = 'SELECT * FROM playlists WHERE id = $1 AND user_id = $2';
-    var params = [playlistID, userID];
+    var query = 'SELECT * FROM playlists WHERE id = $1;';
+    var params = [playlistID];
     pgClient.query(query, params, function(err, result) {
         if (err) { 
             console.log(err); 
@@ -1292,6 +1314,12 @@ app.post('/playlist/song/remove', cors(corsOptions), async function (req, res) {
             console.log('Playlist does not exist!');
             res.status(404).send('A playlist with that playlistID and userID does not exist.'); 
             return;
+        }
+
+        // Check if the user is authorised to add a song to the playlist
+        if (!result.rows[0].user_id === userID) { 
+            res.status(401).send('User is unauthorised to add songs to that playlist.');
+            return; 
         }
 
         // Remove the song from the playlist
