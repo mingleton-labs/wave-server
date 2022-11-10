@@ -1,18 +1,18 @@
 {
     "bot" : {
-        "discordAPIKey" : "OTQ4ODMwNjU1MDc5Mzk1MzY4.YiBhaA.aN1OOzdrNhceWykBZTL5pocXoLo",
-        "guildID" : "618748256028983326"
+        "discordAPIKey" : "X",
+        "guildID" : "X"
     },
     "webClient" : { 
-        "clientId" : "931733366355664908",
-        "clientSecret" : "ElinkcE6jGNqgA498SgL3VaBTzH4B7fN",
+        "clientId" : "X",
+        "clientSecret" : "X",
         "port" : 4242
     },
     "postgres" : {
-        "user" : "mhvnfyigirkygv",
-        "host" : "ec2-18-208-97-23.compute-1.amazonaws.com",
-        "database" : "ddmv8bq89irs3j",
-        "password" : "f60b372577ea0ecfa6bf063b192539e7a806bbce91bf745afc839edc913ad611",
+        "user" : "X",
+        "host" : "X",
+        "database" : "X",
+        "password" : "X",
         "port" : 5432
     }
 }
